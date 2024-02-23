@@ -1,0 +1,39 @@
+---
+title: "Churn_EDA"
+output: pdf_document
+date: "2024-02-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{R}
+library('dplyr')
+```
+```{r}
+churn <- read.csv('Telco_customer_churn.csv')
+head(churn)
+print(length(unique(churn$City)))
+```
+
+```{r}
+unknown_churn_best <- filter(churn, churn$Tenure < 12 & churn$Churn_val== 0) #1070
+unknown_churn_worst <- filter(churn, churn$Tenure < 12 & churn$Churn_val== 0) #1070
+known_churn <- churn %>%
+      filter(! CustomerID %in% unknown_churn$CustomerID) #5973
+dim(unknown_churn)
+unknown_churn_best[ , 'churn_12month'] = 0
+unknown_churn_worst[ , 'churn_12month'] = 1
+known_churn[ , 'churn_12month'] = known_churn$Churn_val
+
+```
+```{r}
+best_case <- rbind(known_churn, unknown_churn_best)
+worst_case <- rbind(known_churn, unknown_churn_worst)
+dim(best_case)
+dim(worst_case)
+
+#write.csv(best_case, "C:\\Users\\user\\Desktop\\24 WI\\DATA #557\\Course_Proj\\best_case.csv", row.names=FALSE)
+#write.csv(worst_case, "C:\\Users\\user\\Desktop\\24 WI\\DATA #557\\Course_Proj\\worst_case.csv", row.names=FALSE)
+```
