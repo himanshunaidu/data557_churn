@@ -1,5 +1,5 @@
 ---
-title: "Churn_Analysis_best_case"
+title: "Churn_Analysis_worst_case"
 output: pdf_document
 date: "2024-02-03"
 ---
@@ -8,7 +8,7 @@ date: "2024-02-03"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{R}
+```{R, include = FALSE}
 library('dplyr')
 library('MASS')
 library('caret')
@@ -41,7 +41,7 @@ best_case <- rbind(known_churn, unknown_churn_best)
 worst_case <- rbind(known_churn, unknown_churn_worst)
 
 # eliminate churn_val since we substitute them with 12 month churn_val using two cases
-best_case <- best_case[-best_case$Churn_val]
+worst_case <- worst_case[-worst_case$Churn_val]
 worst_case <- worst_case[-worst_case$Churn_val]
 
 dim(best_case)
@@ -54,8 +54,8 @@ dim(worst_case)
 
 ```{r}
 # divide customer into churned and not churned group
-churned <- best_case[best_case$churn_12month == 1,]
-not_churned <- best_case[best_case$churn_12month == 0,]
+churned <- worst_case[worst_case$churn_12month == 1,]
+not_churned <- worst_case[worst_case$churn_12month == 0,]
 n_churned = 1869
 n_not_churned = 5174
 ```
@@ -83,7 +83,7 @@ diff_CI
 ```
 
 ```{r}
-sum(is.na(best_case)) # sanity check for na values
+sum(is.na(worst_case)) # sanity check for na values
 ```
 
 ```{r}
@@ -103,54 +103,54 @@ t.test(churned$Total.Charges-not_churned$Total.Charges)$conf
 
 ```{r}
 # Contingency table for churn_12month and non-demographic qualitative variables
-phone_service <- table(best_case$churn_12month, best_case$Phone.Service)
+phone_service <- table(best_case$churn_12month, worst_case$Phone.Service)
 phone_service
-multi_lines <- table(best_case$churn_12month, best_case$Multiple.Lines)
+multi_lines <- table(worst_case$churn_12month, worst_case$Multiple.Lines)
 multi_lines
-internet_service <- table(best_case$churn_12month, best_case$Internet.Service)
+internet_service <- table(worst_case$churn_12month, worst_case$Internet.Service)
 internet_service
-online_security <- table(best_case$churn_12month, best_case$Online.Security)
+online_security <- table(worst_case$churn_12month, worst_case$Online.Security)
 online_security
-online_backup <- table(best_case$churn_12month, best_case$Online.Backup)
+online_backup <- table(worst_case$churn_12month, worst_case$Online.Backup)
 online_backup
-device_protect <- table(best_case$churn_12month, best_case$Device.Protection)
+device_protect <- table(worst_case$churn_12month, worst_case$Device.Protection)
 device_protect
-tech_support <- table(best_case$churn_12month, best_case$Tech.Support)
-stream_tv <- table(best_case$churn_12month, best_case$Streaming.TV)
+tech_support <- table(worst_case$churn_12month, worst_case$Tech.Support)
+stream_tv <- table(worst_case$churn_12month, worst_case$Streaming.TV)
 stream_tv
-stream_movies <- table(best_case$churn_12month, best_case$Streaming.Movies)
+stream_movies <- table(worst_case$churn_12month, worst_case$Streaming.Movies)
 stream_movies
-payment <- table(best_case$churn_12month, best_case$Payment.Method)
+payment <- table(worst_case$churn_12month, worst_case$Payment.Method)
 payment
-paperless <- table(best_case$churn_12month, best_case$Paperless.Billing)
+paperless <- table(worst_case$churn_12month, worst_case$Paperless.Billing)
 paperless
-contract <- table(best_case$churn_12month, best_case$Contract)
+contract <- table(worst_case$churn_12month, worst_case$Contract)
 contract
 
 # just interested
-age_paperless <- table(best_case$Senior.Citizen, best_case$Paperless.Billing)
+age_paperless <- table(worst_case$Senior.Citizen, worst_case$Paperless.Billing)
 age_paperless
 ```
 
 ```{r}
 # Separation of data set into training and test data set with stratification using churn_12 month (Response variable) with proportion checking
-train.index <- createDataPartition(best_case$churn_12month, p = .7, list = FALSE)
-train_best <- best_case[ train.index,]
-#churned_train <- train_best[train_best$churn_12month == 1,]
-#print(length(churned_train$churn_12month)/length(train_best$churn_12month))
+train.index <- createDataPartition(worst_case$churn_12month, p = .7, list = FALSE)
+train_worst <- worst_case[ train.index,]
+#churned_train <- train_worst[train_worst$churn_12month == 1,]
+#print(length(churned_train$churn_12month)/length(train_worst$churn_12month))
 
-test_best  <- best_case[-train.index,]
-#churned_test <- test_best[test_best$churn_12month == 1,]
-#print(length(churned_test$churn_12month)/length(test_best$churn_12month))
+test_worst  <- worst_case[-train.index,]
+#churned_test <- test_worst[test_worst$churn_12month == 1,]
+#print(length(churned_test$churn_12month)/length(test_worst$churn_12month))
 
-#churned <- best_case[best_case$churn_12month == 1,]
-#print(length(churned$churn_12month)/length(best_case$churn_12month))
+#churned <- worst_case[worst_case$churn_12month == 1,]
+#print(length(churned$churn_12month)/length(worst_case$churn_12month))
 ```
 
 
 ```{r}
 # Manually created model by me - includes relevent look-like factors
-model1 <- glm(churn_12month ~ I(Senior.Citizen) + Tenure+I(Internet.Service)+I(Contract) + Total.Charges + I(Payment.Method), data = train_best, family = "binomial")
+model1 <- glm(churn_12month ~ I(Senior.Citizen) + Tenure+I(Internet.Service)+I(Contract) + Total.Charges + I(Payment.Method), data = train_worst, family = "binomial")
 summary(model1)
 ```
 
@@ -163,7 +163,7 @@ model1_step$anova
 ### Including Interaction might depend on the collinearity 
 ```{r}
 # model with every possible variable
-model_2 <- glm(churn_12month ~ I(Senior.Citizen) + Tenure+I(Internet.Service)+I(Contract) + Total.Charges + I(Payment.Method) + Gender + Partner + Dependents + Phone.Service + Multiple.Lines + Internet.Service + Online.Security + Online.Backup + Contract + Paperless.Billing, data = train_best, family = "binomial")
+model_2 <- glm(churn_12month ~ I(Senior.Citizen) + Tenure+I(Internet.Service)+I(Contract) + Total.Charges + I(Payment.Method) + Gender + Partner + Dependents + Phone.Service + Multiple.Lines + Internet.Service + Online.Security + Online.Backup + Contract + Paperless.Billing, data = train_worst, family = "binomial")
 summary(model_2)
 ```
 
@@ -175,27 +175,26 @@ model2_step$anova
 
 
 ```{R}
-null <- glm(churn_12month ~ 1,  data = train_best, family = "binomial")
+null <- glm(churn_12month ~ 1,  data = train_worst, family = "binomial")
 step(null, scope = list(lower=null,upper=model_2),
      direction="both", criterion = "AIC", trace = FALSE)
 ```
 ```{r}
 #named as AIC but k = log(n) makes it calculate BIC 
-null <- glm(churn_12month ~ 1,  data = train_best, family = "binomial")
+null <- glm(churn_12month ~ 1,  data = train_worst, family = "binomial")
 step(null, scope = list(lower=null,upper=model_2),
      direction="both", criterion = "BIC", k = log(4931),trace = FALSE)
 
 ```
 ```{r}
-model_AIC <- glm(churn_12month ~ I(Contract) + I(Internet.Service) + 
-    Tenure + Dependents + Online.Security + Multiple.Lines + 
+model_AIC <- glm(churn_12month ~ I(Contract) + Phone.Service + 
+    Tenure + Dependents + Online.Security + Senior.Citizen + 
     I(Payment.Method) + Paperless.Billing + Total.Charges + Partner, 
-    data = train_best, family = "binomial")
+    data = train_worst, family = "binomial")
 
-model_BIC <- glm(churn_12month ~ I(Contract) + I(Internet.Service) + Tenure + 
-    Dependents + Multiple.Lines + Paperless.Billing + Total.Charges + 
-    Online.Security + I(Payment.Method) + Partner, data = train_best, family = "binomial")
-
+model_BIC <- glm(churn_12month ~ I(Contract) + Phone.Service + Tenure + 
+    Dependents + Paperless.Billing + Total.Charges + 
+    Online.Security, data = train_worst, family = "binomial")
 ```
 
 ```{r}
@@ -204,7 +203,7 @@ cutoff= 0.25
 DF <- model.frame(model_AIC)
 DF$prob <- predict(model_AIC, type = "response")
 DF$flag <- ifelse(DF$prob > cutoff, 1, 0)
-actual_va <- train_best$churn_12month
+actual_va <- train_worst$churn_12month
 ta <- table(DF$flag, actual_va)
 print(ta)
 
@@ -241,11 +240,11 @@ err_metric=function(CM)
 # precision higher than 50
 probability = c(0.3, 0.4, 0.5)
 # ROC curve without probability cutoff
-length(test_best$CustomerID)
-pred_set <- test_best[-test_best$churn_12month]
+length(test_worst$CustomerID)
+pred_set <- test_worst[-test_worst$churn_12month]
 
-logit_P = predict(model_AIC , newdata = test_best[-test_best$churn_12month] ,type = 'response' )
-roc_score=roc(test_best$churn_12month, logit_P) #AUC score
+logit_P = predict(model_AIC , newdata = test_worst[-test_worst$churn_12month] ,type = 'response' )
+roc_score=roc(test_worst$churn_12month, logit_P) #AUC score
 plot(roc_score ,main ="ROC curve -- Logistic Regression ")
 print(roc_score)
 ```
@@ -254,7 +253,7 @@ print(roc_score)
 for (i in 1:length(probability)){
    cut_off = probability[i]
    logit_P_cutoff <- ifelse(logit_P > cut_off, 1,0) # Probability check
-   roc_curve <- roc(test_best$churn_12month, logit_P_cutoff)
+   roc_curve <- roc(test_worst$churn_12month, logit_P_cutoff)
    if(i==1) {    
  
    plot(roc_curve,col=i)   
@@ -264,9 +263,9 @@ for (i in 1:length(probability)){
   }    
   cut_off = probability[i]
   logit_P_cutoff <- ifelse(logit_P > cut_off, 1,0) # Probability check
-  CM= table(test_best$churn_12month, logit_P_cutoff)
+  CM= table(test_worst$churn_12month, logit_P_cutoff)
   print(cut_off)
-  roc_score_cutoff=roc(test_best$churn_12month, logit_P_cutoff) #AUC score
+  roc_score_cutoff=roc(test_worst$churn_12month, logit_P_cutoff) #AUC score
   print(roc_score_cutoff)
   err_metric(CM)
 }
