@@ -1,0 +1,282 @@
+---
+title: "Churn_Analysis_best_case"
+output: pdf_document
+date: "2024-02-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{R}
+library('dplyr')
+```
+```{r}
+churn <- read.csv('Telco_customer_churn_cleaned.csv')
+#head(churn)
+
+#Eliminated Churn Label, Churn Score, and CLTV as we are not using it 
+churn <- churn[ -c(30, 32, 33) ]
+#head(churn)
+```
+
+```{r}
+# Create the best case (not churned) and worst case (churned group)
+
+unknown_churn <- filter(churn, churn$Tenure < 12 & churn$Churn_val== 0) #1070
+known_churn <- churn %>%
+      filter(! CustomerID %in% unknown_churn$CustomerID) #5973
+dim(unknown_churn)
+
+unknown_churn_best[ , 'churn_12month'] = 0
+unknown_churn_worst[ , 'churn_12month'] = 1
+known_churn[ , 'churn_12month'] = known_churn$Churn_val
+
+best_case <- rbind(known_churn, unknown_churn_best)
+worst_case <- rbind(known_churn, unknown_churn_worst)
+
+# eliminate churn_val since we substitute them with 12 month churn_val using two cases
+best_case <- best_case[-best_case$Churn_val]
+worst_case <- worst_case[-worst_case$Churn_val]
+
+dim(best_case)
+dim(worst_case)
+
+
+#write.csv(best_case, "C:\\Users\\user\\Desktop\\24 WI\\DATA #557\\Course_Proj\\best_case.csv", row.names=FALSE)
+#write.csv(worst_case, "C:\\Users\\user\\Desktop\\24 WI\\DATA #557\\Course_Proj\\worst_case.csv", row.names=FALSE)
+```
+
+```{r}
+# divide customer into churned and not churned group
+churned <- best_case[best_case$churn_12month == 1,]
+not_churned <- best_case[best_case$churn_12month == 0,]
+n_churned = 1869
+n_not_churned = 5174
+```
+
+```{r, eval = False}
+# Code that manually checks the confidence interval
+mean_churned = mean(churned$Tenure)
+mean_not_churned = mean(not_churned$Tenure)
+
+se_churned = sd(churned$Tenure)/sqrt(n_churned)
+se_not_churned = sd(not_churned$Tenure)/sqrt(n_not_churned)
+
+churned_CI = c(mean_churned - (se_churned * 1.96), mean_churned + (se_churned * 1.96))
+not_churned_CI = c(mean_not_churned - (se_not_churned * 1.96), mean_not_churned + (se_not_churned * 1.96))
+
+churned_CI
+not_churned_CI
+
+s = sqrt((var(churned$Tenure)+var(not_churned$Tenure))/(n_churned + n_not_churned -2))
+two_mean_se = s * (sqrt(1/n_churned+1/n_not_churned))
+mean_diff = mean_churned - mean_not_churned
+
+diff_CI = c(mean_diff- (1.96*two_mean_se), mean_diff+(1.96*two_mean_se))
+diff_CI
+```
+
+```{r}
+sum(is.na(best_case)) # sanity check for na values
+```
+
+```{r}
+# Confidence interval for tenure months based on churned_12 month or not 
+t.test(churned$Tenure)$conf
+t.test(not_churned$Tenure)$conf
+t.test(churned$Tenure-not_churned$Tenure)$conf
+```
+
+```{r}
+# Confidence interval for total payment based on churned_12 month or not
+# Think about way to standardize this -- total.chargs/tenure.month creats 11 null values
+t.test(churned$Total.Charges)$conf
+t.test(not_churned$Total.Charges)$conf
+t.test(churned$Total.Charges-not_churned$Total.Charges)$conf
+```
+
+```{r}
+# Contingency table for churn_12month and non-demographic qualitative variables
+phone_service <- table(best_case$churn_12month, best_case$Phone.Service)
+phone_service
+multi_lines <- table(best_case$churn_12month, best_case$Multiple.Lines)
+multi_lines
+internet_service <- table(best_case$churn_12month, best_case$Internet.Service)
+internet_service
+online_security <- table(best_case$churn_12month, best_case$Online.Security)
+online_security
+online_backup <- table(best_case$churn_12month, best_case$Online.Backup)
+online_backup
+device_protect <- table(best_case$churn_12month, best_case$Device.Protection)
+device_protect
+tech_support <- table(best_case$churn_12month, best_case$Tech.Support)
+stream_tv <- table(best_case$churn_12month, best_case$Streaming.TV)
+stream_tv
+stream_movies <- table(best_case$churn_12month, best_case$Streaming.Movies)
+stream_movies
+payment <- table(best_case$churn_12month, best_case$Payment.Method)
+payment
+paperless <- table(best_case$churn_12month, best_case$Paperless.Billing)
+paperless
+contract <- table(best_case$churn_12month, best_case$Contract)
+contract
+
+# just interested
+age_paperless <- table(best_case$Senior.Citizen, best_case$Paperless.Billing)
+age_paperless
+```
+
+```{r}
+# Separation of data set into training and test data set with stratification using churn_12 month (Response variable) with proportion checking
+train.index <- createDataPartition(best_case$churn_12month, p = .7, list = FALSE)
+train_best <- best_case[ train.index,]
+#churned_train <- train_best[train_best$churn_12month == 1,]
+#print(length(churned_train$churn_12month)/length(train_best$churn_12month))
+
+test_best  <- best_case[-train.index,]
+#churned_test <- test_best[test_best$churn_12month == 1,]
+#print(length(churned_test$churn_12month)/length(test_best$churn_12month))
+
+#churned <- best_case[best_case$churn_12month == 1,]
+#print(length(churned$churn_12month)/length(best_case$churn_12month))
+```
+
+
+```{r}
+# Manually created model by me - includes relevent look-like factors
+model1 <- glm(churn_12month ~ I(Senior.Citizen) + Tenure+I(Internet.Service)+I(Contract) + Total.Charges + I(Payment.Method), data = train_best, family = "binomial")
+summary(model1)
+```
+```{R}
+library('MASS')
+```
+
+```{r}
+# Did AIC for testing, it seems like AIC did not recommend to exclude any of factors
+model1_step <- stepAIC(model1, trace = TRUE, direction = 'both')
+model1_step$anova
+```
+
+### Including Interaction might depend on the collinearity 
+```{r}
+# model with every possible variable
+model_2 <- glm(churn_12month ~ I(Senior.Citizen) + Tenure+I(Internet.Service)+I(Contract) + Total.Charges + I(Payment.Method) + Gender + Partner + Dependents + Phone.Service + Multiple.Lines + Internet.Service + Online.Security + Online.Backup + Contract + Paperless.Billing, data = train_best, family = "binomial")
+summary(model_2)
+```
+
+```{r}
+model2_step <- stepAIC(model_2, trace = FALSE,direction = 'both')
+model2_step$anova
+```
+
+
+
+```{R}
+null <- glm(churn_12month ~ 1,  data = train_best, family = "binomial")
+step(null, scope = list(lower=null,upper=model_2),
+     direction="both", criterion = "AIC", trace = FALSE)
+```
+```{r}
+#named as AIC but k = log(n) makes it calculate BIC 
+null <- glm(churn_12month ~ 1,  data = train_best, family = "binomial")
+step(null, scope = list(lower=null,upper=model2),
+     direction="both", criterion = "BIC", k = log(4931),trace = FALSE)
+
+```
+```{r}
+model_AIC <- glm(churn_12month ~ I(Contract) + I(Internet.Service) + 
+    Tenure + Dependents + Online.Security + Multiple.Lines + 
+    I(Payment.Method) + Paperless.Billing + Total.Charges + Partner, 
+    data = train_best, family = "binomial")
+
+model_BIC <- glm(churn_12month ~ I(Contract) + I(Internet.Service) + Tenure + 
+    Dependents + Multiple.Lines + Paperless.Billing + Total.Charges + 
+    Online.Security + I(Payment.Method) + Partner, data = train_best, family = "binomial")
+
+```
+```{r}
+library('caret')
+```
+
+
+```{r}
+# what data set... this? need to check if this is on training or test data set 
+cutoff= 0.25
+DF <- model.frame(model_AIC)
+DF$prob <- predict(model_AIC, type = "response")
+DF$flag <- ifelse(DF$prob > cutoff, 1, 0)
+actual_va <- train_best$churn_12month
+ta <- table(DF$flag, actual_va)
+print(ta)
+
+sensitivity(ta)
+specificity(ta)
+```
+
+```{R}
+# Creation of Confusion Matrix
+library(pROC)
+
+err_metric=function(CM)
+{
+  TN =CM[1,1]
+  TP =CM[2,2]
+  FP =CM[1,2]
+  FN =CM[2,1]
+  precision =(TP)/(TP+FP)
+  recall_score =(FP)/(FP+TN)
+  f1_score=2*((precision*recall_score)/(precision+recall_score))
+  accuracy_model  =(TP+TN)/(TP+TN+FP+FN)
+  False_positive_rate =(FP)/(FP+TN)
+  False_negative_rate =(FN)/(FN+TP)
+  print(paste("Precision value of the model: ",round(precision,2)))
+  print(paste("Accuracy of the model: ",round(accuracy_model,2)))
+  print(paste("Recall value of the model: ",round(recall_score,2)))
+  print(paste("False Positive rate of the model: ",round(False_positive_rate,2)))
+  print(paste("False Negative rate of the model: ",round(False_negative_rate,2)))
+  print(paste("f1 score of the model: ",round(f1_score,2)))
+}
+```
+
+```{r}
+# precision higher than 50
+probability = c(0.3, 0.4, 0.5)
+# ROC curve without probability cutoff
+length(test_best$CustomerID)
+pred_set <- test_best[-test_best$churn_12month]
+
+logit_P = predict(model_AIC , newdata = test_best[-test_best$churn_12month] ,type = 'response' )
+roc_score=roc(test_best$churn_12month, logit_P) #AUC score
+plot(roc_score ,main ="ROC curve -- Logistic Regression ")
+print(roc_score)
+```
+```{r}
+# ROC curve with cut off
+for (i in 1:length(probability)){
+   cut_off = probability[i]
+   logit_P_cutoff <- ifelse(logit_P > cut_off, 1,0) # Probability check
+   roc_curve <- roc(test_best$churn_12month, logit_P_cutoff)
+   if(i==1) {    
+ 
+   plot(roc_curve,col=i)   
+
+  }else {
+  lines(roc_curve,col=i) # Need to add legend here
+  }    
+  cut_off = probability[i]
+  logit_P_cutoff <- ifelse(logit_P > cut_off, 1,0) # Probability check
+  CM= table(test_best$churn_12month, logit_P_cutoff)
+  print(cut_off)
+  roc_score_cutoff=roc(test_best$churn_12month, logit_P_cutoff) #AUC score
+  print(roc_score_cutoff)
+  err_metric(CM)
+}
+```
+
+```{r}
+# Bootstrap and CI for AUC
+# Get test sample with replacement, calculate AUC, and do bootstrap?
+
+# Need to ask why and how about this part
+```
