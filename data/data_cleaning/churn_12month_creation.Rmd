@@ -1,0 +1,37 @@
+```{R}
+library('dplyr')
+```
+```{r}
+churn <- read.csv('Telco_customer_churn_cleaned.csv')
+#head(churn)
+
+#Eliminated Churn Label, Churn Score, and CLTV as we are not using it 
+churn <- churn[ -c(30, 32, 33) ]
+#head(churn)
+```
+
+```{r}
+# Create the best case (not churned) and worst case (churned group)
+
+unknown_churn <- filter(churn, churn$Tenure < 12 & churn$Churn_val== 0) #1070
+known_churn <- churn %>%
+      filter(! CustomerID %in% unknown_churn$CustomerID) #5973
+dim(unknown_churn)
+
+unknown_churn_best[ , 'churn_12month'] = 0
+unknown_churn_worst[ , 'churn_12month'] = 1
+known_churn[ , 'churn_12month'] = known_churn$Churn_val
+
+best_case <- rbind(known_churn, unknown_churn_best)
+worst_case <- rbind(known_churn, unknown_churn_worst)
+
+# eliminate churn_val since we substitute them with 12 month churn_val using two cases
+best_case <- best_case[-best_case$Churn_val]
+worst_case <- worst_case[-worst_case$Churn_val]
+
+dim(best_case)
+dim(worst_case)
+
+#write.csv(best_case, "C:\\Users\\user\\Desktop\\24 WI\\DATA #557\\Course_Proj\\best_case.csv", row.names=FALSE)
+#write.csv(worst_case, "C:\\Users\\user\\Desktop\\24 WI\\DATA #557\\Course_Proj\\worst_case.csv", row.names=FALSE)
+```
