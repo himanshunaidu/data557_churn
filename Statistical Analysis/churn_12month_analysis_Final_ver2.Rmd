@@ -1,0 +1,282 @@
+---
+title: "Churn_Analysis_worst_case"
+output: pdf_document
+date: "2024-02-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##### Package
+```{R, include = FALSE}
+library('dplyr')
+library('MASS')
+library('caret')
+library('pROC')
+```
+
+###### Load the data set and eliminate 
+```{r}
+churn <- read.csv('Telco_customer_churn_cleaned.csv')
+
+#Eliminated Total.Charges, Churn Label, Churn Score, and CLTV as we are not using it 
+colnames(churn)[15] <- "Tenure"
+colnames(churn)[31] <- "Churn_val"
+churn <- churn[ -c(29, 30, 32, 33) ]
+```
+
+##### Create the best and worst case data set
+```{r}
+# Create the best case (not churned) and worst case (churned group)
+
+# Case we do not know if customers will churn or not since they have not churned yet and 
+unknown_churn <- filter(churn, churn$Tenure < 12 & churn$Churn_val== 0) 
+unknown_churn_best <- unknown_churn
+unknown_churn_worst <- unknown_churn
+
+# Known Case 1) churned before 12 month 2) churned after 12 month 3) not churned after 12 month
+known_churn <- churn %>%
+      filter(! CustomerID %in% unknown_churn$CustomerID) #5973
+
+# Created best and worst case column
+unknown_churn_best[ , 'churn_12month'] = 0
+unknown_churn_worst[ , 'churn_12month'] = 1
+known_churn[ , 'churn_12month'] = known_churn$Churn_val
+
+# Bind known and unknown case
+best_case <- rbind(known_churn, unknown_churn_best)
+worst_case <- rbind(known_churn, unknown_churn_worst)
+
+# Change churned after 12 month as not churned since a customer hasn't churned yet at 12 month time point
+best_case$churn_12month[best_case$Tenure > 12 & best_case$Churn_val == 1] <- 0
+worst_case$churn_12month[worst_case$Tenure > 12 & worst_case$Churn_val == 1] <- 0
+
+# eliminate churn_val and tenure since we substitute them with 12 month churn_val using two cases and used tenure for it
+```
+
+```{r}
+best_case <- best_case[-c(15, 29)]
+worst_case <- worst_case[-c(15, 29)]
+```
+
+##### Confidence Interval for Monthly Charge
+```{r}
+# divide customer into churned and not churned group
+churned_best <- best_case[best_case$churn_12month == 1,]
+not_churned_best <- best_case[best_case$churn_12month == 0,]
+
+# Confidence interval for monthly based on churned_12 month or not
+t.test(churned_best$Monthly.Charges)$conf
+t.test(not_churned_best$Monthly.Charges)$conf
+```
+```{R}
+# divide customer into churned and not churned group
+churned_worst <- worst_case[worst_case$churn_12month == 1,]
+not_churned_worst <- worst_case[worst_case$churn_12month == 0,]
+
+# Confidence interval for monthly based on churned_12 month or not
+t.test(churned_worst$Monthly.Charges)$conf
+t.test(not_churned_worst$Monthly.Charges)$conf
+```
+##### Contingency table for churn_12 month and non-demographic qualitative variables
+```{r}
+print('best case')
+# Best Case
+phone_service <- table(best_case$churn_12month, best_case$Phone.Service)
+phone_service
+multi_lines <- table(best_case$churn_12month, best_case$Multiple.Lines)
+multi_lines
+internet_service <- table(best_case$churn_12month, best_case$Internet.Service)
+internet_service
+online_security <- table(best_case$churn_12month, best_case$Online.Security)
+online_security
+online_backup <- table(best_case$churn_12month, best_case$Online.Backup)
+online_backup
+device_protect <- table(best_case$churn_12month, best_case$Device.Protection)
+device_protect
+tech_support <- table(best_case$churn_12month, best_case$Tech.Support)
+tech_support
+payment <- table(best_case$churn_12month, best_case$Payment.Method)
+payment
+paperless <- table(best_case$churn_12month, best_case$Paperless.Billing)
+paperless
+contract <- table(best_case$churn_12month, best_case$Contract)
+contract
+
+print('worst case')
+# Worst Case
+phone_service <- table(worst_case$churn_12month, worst_case$Phone.Service)
+phone_service
+multi_lines <- table(worst_case$churn_12month, worst_case$Multiple.Lines)
+multi_lines
+internet_service <- table(worst_case$churn_12month, worst_case$Internet.Service)
+internet_service
+online_security <- table(worst_case$churn_12month, worst_case$Online.Security)
+online_security
+online_backup <- table(worst_case$churn_12month, worst_case$Online.Backup)
+online_backup
+device_protect <- table(worst_case$churn_12month, worst_case$Device.Protection)
+device_protect
+tech_support <- table(worst_case$churn_12month, worst_case$Tech.Support)
+tech_support
+payment <- table(worst_case$churn_12month, worst_case$Payment.Method)
+payment
+paperless <- table(worst_case$churn_12month, worst_case$Paperless.Billing)
+paperless
+contract <- table(worst_case$churn_12month, worst_case$Contract)
+contract
+```
+
+###### Separating data set into training and test data sets with stratification using churn_12month column (Response variable)
+```{r}
+# Chose 0.7 for convention
+train.index <- createDataPartition(best_case$churn_12month, p = .7, list = FALSE)
+train_best <- best_case[ train.index,]
+test_best  <- best_case[-train.index,]
+
+train.index <- createDataPartition(worst_case$churn_12month, p = .7, list = FALSE)
+train_worst <- worst_case[ train.index,]
+test_worst  <- worst_case[-train.index,]
+```
+
+##### Set the full model, without interaction terms
+```{r}
+# model with every possible variable (Total 17, 1 continuous and others categorical)
+model_best_case <- glm(I(churn_12month) ~ Gender + Senior.Citizen + Partner + Dependents + Phone.Service + Multiple.Lines + Internet.Service + Online.Security + Online.Backup + Device.Protection + Tech.Support + Streaming.TV +Streaming.Movies + Contract + Paperless.Billing + Payment.Method + Monthly.Charges, data = train_worst, family = "binomial")
+
+model_worst_case <- glm(I(churn_12month) ~ Gender + Senior.Citizen + Partner + Dependents + Phone.Service + Multiple.Lines + Internet.Service + Online.Security + Online.Backup + Device.Protection + Tech.Support + Streaming.TV +Streaming.Movies + Contract + Paperless.Billing + Payment.Method + Monthly.Charges, data = train_worst, family = "binomial")
+```
+
+##### Fit the full and null model and use AIC to find the model with lowest AIC and BIC, but use AIC for prediction
+```{R}
+# Best model with best case data set
+null <- glm(I(churn_12month) ~ 1,  data = train_best, family = "binomial")
+step(null, scope = list(lower=null,upper=model_best_case),
+     direction="both", criterion = "AIC", trace = FALSE)
+
+#named as AIC but k = log(n) makes it calculate BIC 
+step(null, scope = list(lower=null,upper=model_best_case),
+     direction="both", criterion = "BIC", k = log(4931),trace = FALSE)
+```
+
+```{r}
+null <- glm(I(churn_12month) ~ 1,  data = train_worst, family = "binomial")
+step(null, scope = list(lower=null,upper=model_worst_case),
+     direction="both", criterion = "AIC", trace = FALSE)
+
+#named as AIC but k = log(n) makes it calculate BIC 
+step(null, scope = list(lower=null,upper=model_worst_case),
+     direction="both", criterion = "BIC", k = log(4931),trace = FALSE)
+```
+
+```{r}
+# Final Models
+AIC_best_case <- glm(I(churn_12month) ~ Contract + Online.Security + Partner + 
+    Online.Backup + Payment.Method + Dependents + Multiple.Lines + 
+    Tech.Support + Device.Protection + Internet.Service + Monthly.Charges + 
+    Paperless.Billing + Gender, 
+    data = train_best, family = "binomial")
+summary(AIC_best_case)
+```
+
+```{R}
+AIC_worst_case <- glm(I(churn_12month) ~ Contract + Monthly.Charges + Payment.Method + 
+    Multiple.Lines + Internet.Service + Partner + Online.Backup + 
+    Online.Security + Senior.Citizen + Tech.Support + Device.Protection, data = train_worst, family = "binomial")
+summary(AIC_worst_case)
+```
+```{r}
+suppressWarnings({logit_P_best = predict(AIC_best_case , newdata = test_best[-test_best$churn_12month] ,type = 'response')})
+roc_plot_bestcase=roc(test_best$churn_12month, logit_P_best, level = c(0,1), direction = "<") #AUC score
+auc_bestcase = auc(roc_plot_bestcase)
+print(auc_bestcase)
+```
+```{r}
+logit_P_worst = predict(AIC_worst_case, newdata = test_worst[-test_worst$churn_12month] ,type = 'response' )
+roc_plot_worstcase = roc(test_worst$churn_12month, logit_P_worst, level = c(0,1), direction = "<") #AUC score
+auc_worstcase= auc(roc_plot_worstcase)
+print(auc_worstcase)
+```
+
+```{r}
+plot(roc_plot_worstcase, print.auc= TRUE, type="l", col="blue" , main = "ROC Curve of logistic regression model for best and worst cases")
+par(new=TRUE)
+plot(roc_plot_bestcase, type="l", print.auc=TRUE, print.auc.y = .4,col="darkgreen" )
+par(new=TRUE)
+legend("bottomright", legend=c("ROC for worstcase", "ROC for bestcase"),
+       col=c("blue", "darkgreen"), lty=1:1, cex=0.8)
+```
+##### Conduct bootstrap on AUC by resampling the test set everytime. Since we want to check if the same model works well in bootstrapped data set,
+##### we do not resample train set or retrain models everytime
+```{r}
+set.seed(4444)  # for reproducibility
+
+AUC_B <- c()
+AUC_W <- c()
+w <- nrow(test_worst)
+b <- nrow(test_best)
+
+for (i in 1:1000) {
+test_best_B <- as.data.frame(test_best[sample(b, replace = T),])
+suppressWarnings({logit_P_best = predict(AIC_best_case, newdata = test_best_B[-test_best_B$churn_12month], type = 'response')})
+roc_bestcase= auc(roc(test_best_B$churn_12month, logit_P_best,level = c(0,1), direction = "<")) #AUC score
+AUC_B[i] <- roc_bestcase
+}
+
+quantile(AUC_B, probs = c(0.025, 0.975))
+
+for (i in 1:1000) {
+test_worst_B <- as.data.frame(test_worst[sample(w, replace = T),])
+logit_P_worst = predict(AIC_worst_case, newdata = test_worst_B[-test_worst_B$churn_12month], type = 'response')
+roc_worstcase= auc(roc(test_worst_B$churn_12month, logit_P_worst,level = c(0,1), direction = "<")) #AUC score
+AUC_W[i] <- roc_worstcase
+}
+
+quantile(AUC_W, probs = c(0.025, 0.975))
+```
+##### Crate histogram of AUC from bootstrap with original data's AUC as vertical line for both cases
+```{r}
+par( mfrow= c(1,2) )
+
+hist(AUC_B, main = 'Bootstrap of AUC in best case', xlab = 'AUC')
+abline(v = auc_bestcase, col= 'blue')
+hist(AUC_W, main = 'Bootstrap of AUC in worst case', xlab= 'AUC')
+abline(v=auc_worstcase, col = 'darkgreen')
+```
+
+###### Not necessary
+###### Code that fits model using one-hot encoding and general and check the result
+```{r}
+set.seed(5315)
+#data subset for testing
+encoded_train <- read.csv('preprocessed_train_encoded_no_corr.csv')
+encoded_test <-read.csv('preprocessed_test_encoded_no_corr.csv')
+worst_case <-read.csv('worst_case_final.csv')
+
+train.index <- createDataPartition(worst_case$churn_12month, p = .9, list = FALSE)
+train_worst <- worst_case[ train.index,]
+test_worst  <- worst_case[-train.index,]
+
+encoded <- rbind(encoded_train, encoded_test)
+encoded_subset <- encoded_train[,c(5,14,15, 16, 17)]
+worst_subset <- train_worst[,c(15,16,30)]
+
+```
+
+```{r}
+worst_subset_model <- glm(churn_12month ~ ., data = worst_subset,family = "binomial")
+encoded_subset_model <- glm(churn~ ., data = encoded_subset,family = "binomial")
+summary(encoded_subset_model)
+summary(worst_subset_model)
+
+```
+```{r}
+logit_P_W = predict(worst_subset_model, newdata = test_worst[-test_worst$churn_12month] ,type = 'response' )
+roc_plot_worst = roc(test_worst$churn_12month, logit_P_W) #AUC score
+auc(roc_plot_worst)
+
+logit_P_E = predict(encoded_subset_model, newdata = encoded_test[-encoded_test$churn] ,type = 'response' )
+roc_plot_encoded = roc(encoded_test$churn, logit_P_E) #AUC score
+auc(roc_plot_encoded)
+```
